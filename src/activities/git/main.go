@@ -24,7 +24,6 @@ func CloneRepository(repository string) (CloneRepositoryOutput, error) {
 		return CloneRepositoryOutput{}, err
 	}
 
-	// Clone the git repository
 	cmd := exec.Command("git", "clone", "--depth", "1", repository, temporaryDirectory)
 	if err := cmd.Run(); err != nil {
 		return CloneRepositoryOutput{}, err

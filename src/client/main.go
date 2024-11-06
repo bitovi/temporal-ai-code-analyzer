@@ -12,6 +12,9 @@ import (
 )
 
 func main() {
+	if len(os.Args) < 1 {
+		log.Fatalln("Usage: `go run src/client/main.go <repository URL>`")
+	}
 	repository := os.Args[1]
 
 	err := godotenv.Load()

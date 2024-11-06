@@ -3,6 +3,7 @@ module bitovi.com/code-analyzer
 go 1.21.0
 
 require (
+	github.com/aws/aws-sdk-go v1.55.5
 	github.com/joho/godotenv v1.5.1
 	go.temporal.io/sdk v1.30.0
 )
@@ -15,6 +16,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/nexus-rpc/sdk-go v0.0.11 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
