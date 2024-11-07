@@ -40,7 +40,6 @@ services:
     env_file:
       - .env
     environment:
-      - STORAGE_DIRECTORY=/tmp/worker-storage
       - AWS_CONFIG_ENDPOINT=http://localstack:4566
       - AWS_CONFIG_CREDENTIALS_ID=testUser
       - AWS_CONFIG_CREDENTIALS_KEY=testAccessKey
@@ -48,5 +47,3 @@ services:
       - AWS_CONFIG_REGION=us-east-1
         # - DATABASE_CONNECTION_STRING=postgres://dbuser:dbpassword@db:5432/vector_db
         # - DATABASE_TABLE_NAME=vector_db
-    volumes:
-      - "${TMPDIR:-/tmp}/worker-storage:/tmp/worker-storage"

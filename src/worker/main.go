@@ -4,6 +4,8 @@ import (
 	"log"
 
 	"bitovi.com/code-analyzer/src/activities/git"
+	"bitovi.com/code-analyzer/src/activities/llm"
+	"bitovi.com/code-analyzer/src/activities/s3"
 	"bitovi.com/code-analyzer/src/utils"
 	"bitovi.com/code-analyzer/src/workflows"
 	"go.temporal.io/sdk/worker"
@@ -19,7 +21,14 @@ func main() {
 	w := worker.New(c, "ai-code-analyzer-queue", worker.Options{})
 
 	w.RegisterWorkflow(workflows.CodeAnalyzer)
-	w.RegisterActivity(git.CloneRepository)
+
+	w.RegisterActivity(s3.CreateBucket)
+	w.RegisterActivity(s3.DeleteObject)
+	w.RegisterActivity(s3.DeleteBucket)
+
+	w.RegisterActivity(git.ArchiveRepository)
+
+	w.RegisterActivity(llm.GetEmbeddingData)
 
 	err = w.Run(worker.InterruptCh())
 	if err != nil {
