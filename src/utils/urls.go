@@ -7,6 +7,7 @@ func CleanRepository(repository string) string {
 		"https://", "",
 		"https://", "",
 		"/", "-",
+		".", "-",
 	)
 
 	return replacer.Replace(repository)
