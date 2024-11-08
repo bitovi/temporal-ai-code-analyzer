@@ -31,6 +31,7 @@ func main() {
 	w.RegisterActivity(git.ArchiveRepository)
 
 	w.RegisterActivity(llm.GetEmbeddingData)
+	w.RegisterActivity(llm.InvokePrompt)
 
 	w.RegisterActivity(s3.CreateBucket)
 	w.RegisterActivity(s3.DeleteObject)

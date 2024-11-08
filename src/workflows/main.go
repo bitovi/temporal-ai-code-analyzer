@@ -25,47 +25,52 @@ type AnalyzeOutput struct {
 }
 
 func AnalyzeCode(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, error) {
-	options := workflow.ChildWorkflowOptions{
-		WorkflowID: "process-documents-" + utils.CleanRepository(input.Repository),
-	}
-	cctx := workflow.WithChildOptions(ctx, options)
+	bucketName := utils.CleanRepository(input.Repository)
 
+	cctx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+		WorkflowID: "process-documents-" + utils.CleanRepository(input.Repository),
+	})
 	var processDocumentsResult ProcessDocumentsOutput
 	err := workflow.ExecuteChildWorkflow(cctx, ProcessDocuments, ProcessDocumentsInput{
 		Repository: input.Repository,
+		BucketName: bucketName,
 	}).Get(cctx, &processDocumentsResult)
 	if err != nil {
 		return AnalyzeOutput{}, fmt.Errorf("failed to process documents for %s: %w", input.Repository, err)
 	}
 
-	var invokePromptResult ProcessDocumentsOutput
-	err = workflow.ExecuteChildWorkflow(cctx, InvokePrompt, InvokePromptInput(
-		input,
-	)).Get(cctx, &invokePromptResult)
+	cctx = workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+		WorkflowID: "invoke-prompt-" + utils.CleanRepository(input.Repository),
+	})
+	var invokePromptResult InvokePromptOutput
+	err = workflow.ExecuteChildWorkflow(cctx, InvokePrompt, InvokePromptInput{
+		Repository: input.Repository,
+		BucketName: bucketName,
+		Query:      input.Query,
+	}).Get(cctx, &invokePromptResult)
 	if err != nil {
 		return AnalyzeOutput{}, fmt.Errorf("failed to invoke prompt %s for %s: %w", input.Query, input.Repository, err)
 	}
 
 	return AnalyzeOutput{
-		Response: "",
+		Response: invokePromptResult.Response,
 	}, nil
 }
 
 type ProcessDocumentsInput struct {
 	Repository string
+	BucketName string
 }
 type ProcessDocumentsOutput struct {
 	Records int
 }
 
 func ProcessDocuments(ctx workflow.Context, input ProcessDocumentsInput) (ProcessDocumentsOutput, error) {
-	bucketName := utils.CleanRepository(input.Repository)
-
 	workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, defaultActivityOptions),
 		s3.CreateBucket,
 		s3.CreateBucketInput{
-			Bucket: bucketName,
+			Bucket: input.BucketName,
 		},
 	).Get(ctx, nil)
 
@@ -75,7 +80,7 @@ func ProcessDocuments(ctx workflow.Context, input ProcessDocumentsInput) (Proces
 		git.ArchiveRepository,
 		git.ArchiveRepositoryInput{
 			Repository: input.Repository,
-			Bucket:     bucketName,
+			Bucket:     input.BucketName,
 		},
 	).Get(ctx, &archiveResult)
 
@@ -85,7 +90,7 @@ func ProcessDocuments(ctx workflow.Context, input ProcessDocumentsInput) (Proces
 			workflow.WithActivityOptions(ctx, defaultActivityOptions),
 			llm.GetEmbeddingData,
 			llm.GetEmbeddingDataInput{
-				Bucket: bucketName,
+				Bucket: input.BucketName,
 				Key:    key,
 			},
 		)
@@ -119,29 +124,29 @@ func ProcessDocuments(ctx workflow.Context, input ProcessDocumentsInput) (Proces
 	}
 	records := len(embeddings)
 
-	deleteObjectFutures := make([]workflow.Future, len(archiveResult.Keys))
-	for i, key := range archiveResult.Keys {
-		f := workflow.ExecuteActivity(
-			workflow.WithActivityOptions(ctx, defaultActivityOptions),
-			s3.DeleteObject,
-			s3.DeleteObjectInput{
-				Bucket: bucketName,
-				Key:    key,
-			},
-		)
-		deleteObjectFutures[i] = f
-	}
-	for _, f := range deleteObjectFutures {
-		f.Get(ctx, nil)
-	}
+	// deleteObjectFutures := make([]workflow.Future, len(archiveResult.Keys))
+	// for i, key := range archiveResult.Keys {
+	// 	f := workflow.ExecuteActivity(
+	// 		workflow.WithActivityOptions(ctx, defaultActivityOptions),
+	// 		s3.DeleteObject,
+	// 		s3.DeleteObjectInput{
+	// 			Bucket: input.BucketName,
+	// 			Key:    key,
+	// 		},
+	// 	)
+	// 	deleteObjectFutures[i] = f
+	// }
+	// for _, f := range deleteObjectFutures {
+	// 	f.Get(ctx, nil)
+	// }
 
-	workflow.ExecuteActivity(
-		workflow.WithActivityOptions(ctx, defaultActivityOptions),
-		s3.DeleteBucket,
-		s3.DeleteBucketInput{
-			Bucket: bucketName,
-		},
-	).Get(ctx, nil)
+	// workflow.ExecuteActivity(
+	// 	workflow.WithActivityOptions(ctx, defaultActivityOptions),
+	// 	s3.DeleteBucket,
+	// 	s3.DeleteBucketInput{
+	// 		Bucket: input.BucketName,
+	// 	},
+	// ).Get(ctx, nil)
 
 	return ProcessDocumentsOutput{
 		Records: records,
@@ -150,11 +155,11 @@ func ProcessDocuments(ctx workflow.Context, input ProcessDocumentsInput) (Proces
 
 type InvokePromptInput struct {
 	Repository string
+	BucketName string
 	Query      string
 }
 type InvokePromptOutput struct {
-	// Response string
-	RelatedDocuments []string
+	Response string
 }
 
 func InvokePrompt(ctx workflow.Context, input InvokePromptInput) (InvokePromptOutput, error) {
@@ -168,8 +173,18 @@ func InvokePrompt(ctx workflow.Context, input InvokePromptInput) (InvokePromptOu
 		},
 	).Get(ctx, &relatedDocuments)
 
+	var response string
+	workflow.ExecuteActivity(
+		workflow.WithActivityOptions(ctx, defaultActivityOptions),
+		llm.InvokePrompt,
+		llm.InvokePromptInput{
+			Query:                  input.Query,
+			RelatedDocumentsBucket: input.BucketName,
+			RelatedDocumentsKeys:   relatedDocuments.Keys,
+		},
+	).Get(ctx, &response)
+
 	return InvokePromptOutput{
-		// Response: "",
-		RelatedDocuments: relatedDocuments.Keys,
+		Response: response,
 	}, nil
 }

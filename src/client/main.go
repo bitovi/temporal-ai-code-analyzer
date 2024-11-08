@@ -43,12 +43,10 @@ func main() {
 		log.Fatalln("Unable to execute workflow", err)
 	}
 
-	log.Println("Workflow ", we.GetID(), "running")
-
 	var result workflows.AnalyzeOutput
 	err = we.Get(context.Background(), &result)
 	if err != nil {
 		log.Fatalln("Unable get workflow result", err)
 	}
-	log.Println("Workflow result:", result)
+	log.Printf("Repository:\n%s\n\nQuestion:\n%s\n\nResponse:\n%s\n", repository, query, result.Response)
 }
