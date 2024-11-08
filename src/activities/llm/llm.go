@@ -23,19 +23,7 @@ type GetEmbeddingDataOutput struct {
 	Embedding []float32
 }
 
-type FetchEmbeddingsApiRequest struct {
-	Input string `json:"input"`
-	Model string `json:"model"`
-}
-type EmbeddingResponse struct {
-	Data []struct {
-		Embedding []float32 `json:"embedding"`
-	} `json:"data"`
-}
-
 func GetEmbeddingData(input GetEmbeddingDataInput) (GetEmbeddingDataOutput, error) {
-	url := "https://api.openai.com/v1/embeddings"
-
 	body, err := s3.GetObject(
 		input.Bucket,
 		input.Key,
@@ -44,21 +32,43 @@ func GetEmbeddingData(input GetEmbeddingDataInput) (GetEmbeddingDataOutput, erro
 		return GetEmbeddingDataOutput{}, fmt.Errorf("error fetching %s from S3 bucket: %w", input.Key, err)
 	}
 
-	data := &FetchEmbeddingsApiRequest{
-		Input: string(body),
-		Model: "text-embedding-ada-002",
-	}
-
-	var result EmbeddingResponse
-	result, err = PostRequest(url, data, result, OpenAPIKey)
+	result, err := FetchEmbedding(string(body))
 	if err != nil {
 		return GetEmbeddingDataOutput{}, fmt.Errorf("error getting embeddings data for %s: %w", input.Key, err)
 	}
 
 	return GetEmbeddingDataOutput{
 		Key:       input.Key,
-		Embedding: result.Data[0].Embedding,
+		Embedding: result,
 	}, nil
+}
+
+type FetchEmbeddingsApiRequest struct {
+	Input string `json:"input"`
+	Model string `json:"model"`
+}
+
+type EmbeddingResponse struct {
+	Data []struct {
+		Embedding []float32
+	}
+}
+
+func FetchEmbedding(text string) ([]float32, error) {
+	url := "https://api.openai.com/v1/embeddings"
+
+	data := &FetchEmbeddingsApiRequest{
+		Input: text,
+		Model: "text-embedding-ada-002",
+	}
+
+	var result EmbeddingResponse
+	result, err := PostRequest(url, data, result, OpenAPIKey)
+	if err != nil {
+		return []float32{}, err
+	}
+
+	return result.Data[0].Embedding, nil
 }
 
 func PostRequest[T any](url string, body any, result T, apiKey string) (T, error) {

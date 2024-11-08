@@ -22,8 +22,11 @@ func main() {
 	w := worker.New(c, "ai-code-analyzer-queue", worker.Options{})
 
 	w.RegisterActivity(db.InsertEmbedding)
+	w.RegisterActivity(db.GetRelatedDocuments)
 
-	w.RegisterWorkflow(workflows.CodeAnalyzer)
+	w.RegisterWorkflow(workflows.AnalyzeCode)
+	w.RegisterWorkflow(workflows.ProcessDocuments)
+	w.RegisterWorkflow(workflows.InvokePrompt)
 
 	w.RegisterActivity(git.ArchiveRepository)
 

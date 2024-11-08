@@ -12,10 +12,11 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Fatalln("Usage: `go run src/client/main.go <repository URL>`")
+	if len(os.Args) < 3 {
+		log.Fatalln("Usage: `go run src/client/main.go <repository URL> <query>`")
 	}
 	repository := os.Args[1]
+	query := os.Args[2]
 
 	err := godotenv.Load()
 	if err != nil {
@@ -30,13 +31,14 @@ func main() {
 
 	input := workflows.AnalyzeInput{
 		Repository: repository,
+		Query:      query,
 	}
-	workflowID := "analyze-" + utils.CleanRepository(repository) + "-workflow"
+	workflowID := "analyze-" + utils.CleanRepository(repository)
 	workflowOptions := client.StartWorkflowOptions{
 		ID:        workflowID,
 		TaskQueue: "ai-code-analyzer-queue",
 	}
-	we, err := c.ExecuteWorkflow(context.Background(), workflowOptions, workflows.CodeAnalyzer, input)
+	we, err := c.ExecuteWorkflow(context.Background(), workflowOptions, workflows.AnalyzeCode, input)
 	if err != nil {
 		log.Fatalln("Unable to execute workflow", err)
 	}
