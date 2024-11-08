@@ -19,6 +19,7 @@ type GetEmbeddingDataInput struct {
 }
 
 type GetEmbeddingDataOutput struct {
+	Key       string
 	Embedding []float32
 }
 
@@ -55,6 +56,7 @@ func GetEmbeddingData(input GetEmbeddingDataInput) (GetEmbeddingDataOutput, erro
 	}
 
 	return GetEmbeddingDataOutput{
+		Key:       input.Key,
 		Embedding: result.Data[0].Embedding,
 	}, nil
 }

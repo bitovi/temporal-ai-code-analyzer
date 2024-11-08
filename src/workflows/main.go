@@ -3,6 +3,7 @@ package workflows
 import (
 	"time"
 
+	"bitovi.com/code-analyzer/src/activities/db"
 	"bitovi.com/code-analyzer/src/activities/git"
 	"bitovi.com/code-analyzer/src/activities/llm"
 	"bitovi.com/code-analyzer/src/activities/s3"
@@ -18,7 +19,7 @@ type AnalyzeInput struct {
 	Repository string
 }
 type AnalyzeOutput struct {
-	Embeddings [][]float32
+	Records int
 }
 
 func CodeAnalyzer(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, error) {
@@ -55,14 +56,32 @@ func CodeAnalyzer(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, erro
 		embeddingsFutures[i] = f
 	}
 
-	var embeddings [][]float32
+	var embeddings []llm.GetEmbeddingDataOutput
 	for _, f := range embeddingsFutures {
 		var embeddingResult llm.GetEmbeddingDataOutput
 		f.Get(ctx, &embeddingResult)
-		embeddings = append(embeddings, embeddingResult.Embedding)
+		embeddings = append(embeddings, embeddingResult)
 	}
 
-	deleteFutures := make([]workflow.Future, len(archiveResult.Keys))
+	insertFutures := make([]workflow.Future, len(embeddings))
+	for i, e := range embeddings {
+		f := workflow.ExecuteActivity(
+			workflow.WithActivityOptions(ctx, defaultActivityOptions),
+			db.InsertEmbedding,
+			db.InsertEmbeddingInput{
+				Repository: input.Repository,
+				Key:        e.Key,
+				Embedding:  e.Embedding,
+			},
+		)
+		insertFutures[i] = f
+	}
+	for _, f := range insertFutures {
+		f.Get(ctx, nil)
+	}
+	records := len(embeddings)
+
+	deleteObjectFutures := make([]workflow.Future, len(archiveResult.Keys))
 	for i, key := range archiveResult.Keys {
 		f := workflow.ExecuteActivity(
 			workflow.WithActivityOptions(ctx, defaultActivityOptions),
@@ -72,9 +91,9 @@ func CodeAnalyzer(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, erro
 				Key:    key,
 			},
 		)
-		deleteFutures[i] = f
+		deleteObjectFutures[i] = f
 	}
-	for _, f := range deleteFutures {
+	for _, f := range deleteObjectFutures {
 		f.Get(ctx, nil)
 	}
 
@@ -87,6 +106,6 @@ func CodeAnalyzer(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, erro
 	).Get(ctx, nil)
 
 	return AnalyzeOutput{
-		Embeddings: embeddings,
+		Records: records,
 	}, nil
 }

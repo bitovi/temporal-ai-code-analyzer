@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"bitovi.com/code-analyzer/src/activities/db"
 	"bitovi.com/code-analyzer/src/activities/git"
 	"bitovi.com/code-analyzer/src/activities/llm"
 	"bitovi.com/code-analyzer/src/activities/s3"
@@ -20,15 +21,17 @@ func main() {
 
 	w := worker.New(c, "ai-code-analyzer-queue", worker.Options{})
 
-	w.RegisterWorkflow(workflows.CodeAnalyzer)
+	w.RegisterActivity(db.InsertEmbedding)
 
-	w.RegisterActivity(s3.CreateBucket)
-	w.RegisterActivity(s3.DeleteObject)
-	w.RegisterActivity(s3.DeleteBucket)
+	w.RegisterWorkflow(workflows.CodeAnalyzer)
 
 	w.RegisterActivity(git.ArchiveRepository)
 
 	w.RegisterActivity(llm.GetEmbeddingData)
+
+	w.RegisterActivity(s3.CreateBucket)
+	w.RegisterActivity(s3.DeleteObject)
+	w.RegisterActivity(s3.DeleteBucket)
 
 	err = w.Run(worker.InterruptCh())
 	if err != nil {
