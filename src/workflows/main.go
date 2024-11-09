@@ -9,6 +9,7 @@ import (
 	"bitovi.com/code-analyzer/src/activities/llm"
 	"bitovi.com/code-analyzer/src/activities/s3"
 	"bitovi.com/code-analyzer/src/utils"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -87,7 +88,13 @@ func ProcessDocuments(ctx workflow.Context, input ProcessDocumentsInput) (Proces
 	embeddingsFutures := make([]workflow.Future, len(archiveResult.Keys))
 	for i, key := range archiveResult.Keys {
 		f := workflow.ExecuteActivity(
-			workflow.WithActivityOptions(ctx, defaultActivityOptions),
+			workflow.WithRetryPolicy(
+				workflow.WithActivityOptions(ctx, defaultActivityOptions),
+				temporal.RetryPolicy{
+					InitialInterval: time.Second * 8,
+					MaximumAttempts: 5,
+				},
+			),
 			llm.GetEmbeddingData,
 			llm.GetEmbeddingDataInput{
 				Bucket: input.BucketName,
@@ -101,7 +108,9 @@ func ProcessDocuments(ctx workflow.Context, input ProcessDocumentsInput) (Proces
 	for _, f := range embeddingsFutures {
 		var embeddingResult llm.GetEmbeddingDataOutput
 		f.Get(ctx, &embeddingResult)
-		embeddings = append(embeddings, embeddingResult)
+		if len(embeddingResult.Embedding) > 0 {
+			embeddings = append(embeddings, embeddingResult)
+		}
 	}
 
 	insertFutures := make([]workflow.Future, len(embeddings))

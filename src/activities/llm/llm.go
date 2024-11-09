@@ -1,15 +1,12 @@
 package llm
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 
 	"bitovi.com/code-analyzer/src/activities/s3"
+	"bitovi.com/code-analyzer/src/utils/http"
 )
 
 var OpenAPIKey string = os.Getenv("OPENAI_API_KEY")
@@ -35,6 +32,9 @@ func GetEmbeddingData(input GetEmbeddingDataInput) (GetEmbeddingDataOutput, erro
 
 	result, err := FetchEmbedding(string(body))
 	if err != nil {
+		if strings.Contains(err.Error(), "maximum context length") {
+			return GetEmbeddingDataOutput{}, nil
+		}
 		return GetEmbeddingDataOutput{}, fmt.Errorf("error getting embeddings data for %s: %w", input.Key, err)
 	}
 
@@ -60,11 +60,11 @@ func FetchEmbedding(text string) ([]float32, error) {
 
 	data := &FetchEmbeddingsApiRequest{
 		Input: text,
-		Model: "text-embedding-ada-002",
+		Model: "text-embedding-3-small",
 	}
 
 	var result EmbeddingResponse
-	result, err := PostRequest(url, data, result, OpenAPIKey)
+	result, err := http.PostRequest(url, data, result, OpenAPIKey)
 	if err != nil {
 		return []float32{}, err
 	}
@@ -110,42 +110,9 @@ func FetchCompletion(input [][]string) (ChatCompletion, error) {
 	}
 
 	var result ChatCompletion
-	result, err := PostRequest(url, data, result, OpenAPIKey)
+	result, err := http.PostRequest(url, data, result, OpenAPIKey)
 	if err != nil {
 		return ChatCompletion{}, err
-	}
-
-	return result, nil
-}
-
-func PostRequest[T any](url string, body any, result T, apiKey string) (T, error) {
-	b, err := json.Marshal(body)
-	if err != nil {
-		return result, err
-	}
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(b))
-	if err != nil {
-		return result, err
-	}
-
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", apiKey))
-	req.Header.Add("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return result, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return result, fmt.Errorf("bad status code: %d - %s", resp.StatusCode, body)
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	if err != nil {
-		return result, err
 	}
 
 	return result, nil
