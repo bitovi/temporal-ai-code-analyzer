@@ -26,8 +26,6 @@ func main() {
 	w.RegisterActivity(db.GetEmbeddingCount)
 
 	w.RegisterWorkflow(workflows.AnalyzeCode)
-	w.RegisterWorkflow(workflows.ProcessDocuments)
-	w.RegisterWorkflow(workflows.InvokePrompt)
 
 	w.RegisterActivity(git.ArchiveRepository)
 

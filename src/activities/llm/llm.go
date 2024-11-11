@@ -119,8 +119,8 @@ func FetchCompletion(input [][]string) (ChatCompletion, error) {
 }
 
 type InvokePromptInput struct {
-	Query            string
-	RelatedDocuments []string
+	Query          string
+	RelatedContent []string
 }
 
 func InvokePrompt(input InvokePromptInput) (string, error) {
@@ -128,7 +128,7 @@ func InvokePrompt(input InvokePromptInput) (string, error) {
 		{"system", "You are a friendly, helpful software assistant. Your goal is to help users understand the code within a Git repository."},
 		{"system", "You should respond in short paragraphs, using Markdown formatting for any blocks of code, separated with two newlines to keep your responses easily readable."},
 		{"system", "Whenever possible, use code examples derived from the documentation provided."},
-		{"system", "Here are the files from the Git repository that are relevant to the user's question: " + strings.Join(input.RelatedDocuments, "\n\n")},
+		{"system", "Here are the files from the Git repository that are relevant to the user's question: " + strings.Join(input.RelatedContent, "\n\n")},
 		{"user", input.Query},
 	}
 

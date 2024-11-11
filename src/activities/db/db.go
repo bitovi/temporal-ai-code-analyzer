@@ -80,7 +80,7 @@ type GetRelatedDocumentsInput struct {
 	Limit      int
 }
 type GetRelatedDocumentsOutput struct {
-	Contents []string
+	Records []EmbeddingRecord
 }
 
 func GetRelatedDocuments(ctx context.Context, input GetRelatedDocumentsInput) (GetRelatedDocumentsOutput, error) {
@@ -94,26 +94,21 @@ func GetRelatedDocuments(ctx context.Context, input GetRelatedDocumentsInput) (G
 		return GetRelatedDocumentsOutput{}, err
 	}
 
-	limit := input.Limit
-	if limit == 0 {
-		limit = 5
-	}
-
-	query := "SELECT content FROM documents WHERE repository=$1 ORDER BY embedding <=> $2 LIMIT $3"
-	rows, err := conn.Query(ctx, query, input.Repository, pgvector.NewVector(embeddingForQuery), limit)
+	query := "SELECT key, content FROM documents WHERE repository=$1 ORDER BY embedding <=> $2 LIMIT $3"
+	rows, err := conn.Query(ctx, query, input.Repository, pgvector.NewVector(embeddingForQuery), input.Limit)
 	if err != nil {
 		return GetRelatedDocumentsOutput{}, fmt.Errorf("error fetching related documents: %w", err)
 	}
 	defer rows.Close()
 
-	var contents []string
+	var relatedRecords []EmbeddingRecord
 	for rows.Next() {
 		var doc EmbeddingRecord
-		err = rows.Scan(&doc.Content)
+		err = rows.Scan(&doc.Key, &doc.Content)
 		if err != nil {
 			return GetRelatedDocumentsOutput{}, err
 		}
-		contents = append(contents, doc.Content)
+		relatedRecords = append(relatedRecords, doc)
 	}
 
 	if rows.Err() != nil {
@@ -121,6 +116,6 @@ func GetRelatedDocuments(ctx context.Context, input GetRelatedDocumentsInput) (G
 	}
 
 	return GetRelatedDocumentsOutput{
-		Contents: contents,
+		Records: relatedRecords,
 	}, nil
 }

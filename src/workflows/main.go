@@ -1,7 +1,6 @@
 package workflows
 
 import (
-	"fmt"
 	"time"
 
 	"bitovi.com/code-analyzer/src/activities/db"
@@ -36,149 +35,99 @@ func AnalyzeCode(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, error
 	).Get(ctx, &embeddingsCount)
 
 	if embeddingsCount == 0 {
-		cctx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
-			WorkflowID: "process-documents-" + utils.CleanRepository(input.Repository),
-		})
-		var processDocumentsResult ProcessDocumentsOutput
-		err := workflow.ExecuteChildWorkflow(cctx, ProcessDocuments, ProcessDocumentsInput{
-			Repository: input.Repository,
-			BucketName: utils.CleanRepository(input.Repository),
-		}).Get(cctx, &processDocumentsResult)
-		if err != nil {
-			return AnalyzeOutput{}, fmt.Errorf("failed to process documents for %s: %w", input.Repository, err)
+		bucketName := utils.CleanRepository(input.Repository)
+
+		workflow.ExecuteActivity(
+			workflow.WithActivityOptions(ctx, defaultActivityOptions),
+			s3.CreateBucket,
+			s3.CreateBucketInput{
+				Bucket: bucketName,
+			},
+		).Get(ctx, nil)
+
+		var archiveResult git.ArchiveRepositoryOutput
+		workflow.ExecuteActivity(
+			workflow.WithActivityOptions(ctx, defaultActivityOptions),
+			git.ArchiveRepository,
+			git.ArchiveRepositoryInput{
+				Repository: input.Repository,
+				Bucket:     bucketName,
+			},
+		).Get(ctx, &archiveResult)
+
+		embeddingsFutures := make([]workflow.Future, len(archiveResult.Keys))
+		for i, key := range archiveResult.Keys {
+			f := workflow.ExecuteActivity(
+				workflow.WithRetryPolicy(
+					workflow.WithActivityOptions(ctx, defaultActivityOptions),
+					temporal.RetryPolicy{
+						InitialInterval: time.Second * 8,
+						MaximumAttempts: 5,
+					},
+				),
+				llm.GetEmbeddingData,
+				llm.GetEmbeddingDataInput{
+					Bucket: bucketName,
+					Key:    key,
+				},
+			)
+			embeddingsFutures[i] = f
 		}
-	}
 
-	cctx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
-		WorkflowID: "invoke-prompt-" + utils.CleanRepository(input.Repository),
-	})
-	var invokePromptResult InvokePromptOutput
-	err := workflow.ExecuteChildWorkflow(cctx, InvokePrompt, InvokePromptInput(
-		input,
-	)).Get(cctx, &invokePromptResult)
-	if err != nil {
-		return AnalyzeOutput{}, fmt.Errorf("failed to invoke prompt %s for %s: %w", input.Query, input.Repository, err)
-	}
+		var embeddings []llm.GetEmbeddingDataOutput
+		for _, f := range embeddingsFutures {
+			var embeddingResult llm.GetEmbeddingDataOutput
+			f.Get(ctx, &embeddingResult)
+			if len(embeddingResult.Embedding) > 0 {
+				embeddings = append(embeddings, embeddingResult)
+			}
+		}
 
-	return AnalyzeOutput(
-		invokePromptResult,
-	), nil
-}
-
-type ProcessDocumentsInput struct {
-	Repository string
-	BucketName string
-}
-type ProcessDocumentsOutput struct {
-	Records int
-}
-
-func ProcessDocuments(ctx workflow.Context, input ProcessDocumentsInput) (ProcessDocumentsOutput, error) {
-	workflow.ExecuteActivity(
-		workflow.WithActivityOptions(ctx, defaultActivityOptions),
-		s3.CreateBucket,
-		s3.CreateBucketInput{
-			Bucket: input.BucketName,
-		},
-	).Get(ctx, nil)
-
-	var archiveResult git.ArchiveRepositoryOutput
-	workflow.ExecuteActivity(
-		workflow.WithActivityOptions(ctx, defaultActivityOptions),
-		git.ArchiveRepository,
-		git.ArchiveRepositoryInput{
-			Repository: input.Repository,
-			Bucket:     input.BucketName,
-		},
-	).Get(ctx, &archiveResult)
-
-	embeddingsFutures := make([]workflow.Future, len(archiveResult.Keys))
-	for i, key := range archiveResult.Keys {
-		f := workflow.ExecuteActivity(
-			workflow.WithRetryPolicy(
+		insertFutures := make([]workflow.Future, len(embeddings))
+		for i, e := range embeddings {
+			f := workflow.ExecuteActivity(
 				workflow.WithActivityOptions(ctx, defaultActivityOptions),
-				temporal.RetryPolicy{
-					InitialInterval: time.Second * 8,
-					MaximumAttempts: 5,
+				db.InsertEmbedding,
+				db.InsertEmbeddingInput{
+					Bucket: bucketName,
+					EmbeddingRecord: db.EmbeddingRecord{
+						Repository: input.Repository,
+						Key:        e.Key,
+						Embedding:  e.Embedding,
+					},
 				},
-			),
-			llm.GetEmbeddingData,
-			llm.GetEmbeddingDataInput{
-				Bucket: input.BucketName,
-				Key:    key,
-			},
-		)
-		embeddingsFutures[i] = f
-	}
-
-	var embeddings []llm.GetEmbeddingDataOutput
-	for _, f := range embeddingsFutures {
-		var embeddingResult llm.GetEmbeddingDataOutput
-		f.Get(ctx, &embeddingResult)
-		if len(embeddingResult.Embedding) > 0 {
-			embeddings = append(embeddings, embeddingResult)
+			)
+			insertFutures[i] = f
 		}
-	}
+		for _, f := range insertFutures {
+			f.Get(ctx, nil)
+		}
 
-	insertFutures := make([]workflow.Future, len(embeddings))
-	for i, e := range embeddings {
-		f := workflow.ExecuteActivity(
-			workflow.WithActivityOptions(ctx, defaultActivityOptions),
-			db.InsertEmbedding,
-			db.InsertEmbeddingInput{
-				Bucket: input.BucketName,
-				EmbeddingRecord: db.EmbeddingRecord{
-					Repository: input.Repository,
-					Key:        e.Key,
-					Embedding:  e.Embedding,
+		deleteObjectFutures := make([]workflow.Future, len(archiveResult.Keys))
+		for i, key := range archiveResult.Keys {
+			f := workflow.ExecuteActivity(
+				workflow.WithActivityOptions(ctx, defaultActivityOptions),
+				s3.DeleteObject,
+				s3.DeleteObjectInput{
+					Bucket: bucketName,
+					Key:    key,
 				},
-			},
-		)
-		insertFutures[i] = f
-	}
-	for _, f := range insertFutures {
-		f.Get(ctx, nil)
-	}
-	records := len(embeddings)
+			)
+			deleteObjectFutures[i] = f
+		}
+		for _, f := range deleteObjectFutures {
+			f.Get(ctx, nil)
+		}
 
-	deleteObjectFutures := make([]workflow.Future, len(archiveResult.Keys))
-	for i, key := range archiveResult.Keys {
-		f := workflow.ExecuteActivity(
+		workflow.ExecuteActivity(
 			workflow.WithActivityOptions(ctx, defaultActivityOptions),
-			s3.DeleteObject,
-			s3.DeleteObjectInput{
-				Bucket: input.BucketName,
-				Key:    key,
+			s3.DeleteBucket,
+			s3.DeleteBucketInput{
+				Bucket: bucketName,
 			},
-		)
-		deleteObjectFutures[i] = f
-	}
-	for _, f := range deleteObjectFutures {
-		f.Get(ctx, nil)
+		).Get(ctx, nil)
 	}
 
-	workflow.ExecuteActivity(
-		workflow.WithActivityOptions(ctx, defaultActivityOptions),
-		s3.DeleteBucket,
-		s3.DeleteBucketInput{
-			Bucket: input.BucketName,
-		},
-	).Get(ctx, nil)
-
-	return ProcessDocumentsOutput{
-		Records: records,
-	}, nil
-}
-
-type InvokePromptInput struct {
-	Repository string
-	Query      string
-}
-type InvokePromptOutput struct {
-	Response string
-}
-
-func InvokePrompt(ctx workflow.Context, input InvokePromptInput) (InvokePromptOutput, error) {
 	var relatedDocuments db.GetRelatedDocumentsOutput
 	workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, defaultActivityOptions),
@@ -186,20 +135,26 @@ func InvokePrompt(ctx workflow.Context, input InvokePromptInput) (InvokePromptOu
 		db.GetRelatedDocumentsInput{
 			Repository: input.Repository,
 			Query:      input.Query,
+			Limit:      5,
 		},
 	).Get(ctx, &relatedDocuments)
+
+	var relatedContent = make([]string, len(relatedDocuments.Records))
+	for i, record := range relatedDocuments.Records {
+		relatedContent[i] = record.Content
+	}
 
 	var response string
 	workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, defaultActivityOptions),
 		llm.InvokePrompt,
 		llm.InvokePromptInput{
-			Query:            input.Query,
-			RelatedDocuments: relatedDocuments.Contents,
+			Query:          input.Query,
+			RelatedContent: relatedContent,
 		},
 	).Get(ctx, &response)
 
-	return InvokePromptOutput{
+	return AnalyzeOutput{
 		Response: response,
 	}, nil
 }
