@@ -23,6 +23,7 @@ func main() {
 
 	w.RegisterActivity(db.InsertEmbedding)
 	w.RegisterActivity(db.GetRelatedDocuments)
+	w.RegisterActivity(db.GetEmbeddingCount)
 
 	w.RegisterWorkflow(workflows.AnalyzeCode)
 	w.RegisterWorkflow(workflows.ProcessDocuments)

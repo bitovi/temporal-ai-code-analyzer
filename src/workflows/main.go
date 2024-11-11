@@ -26,35 +26,43 @@ type AnalyzeOutput struct {
 }
 
 func AnalyzeCode(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, error) {
-	bucketName := utils.CleanRepository(input.Repository)
-	cctx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
-		WorkflowID: "process-documents-" + utils.CleanRepository(input.Repository),
-	})
-	var processDocumentsResult ProcessDocumentsOutput
-	err := workflow.ExecuteChildWorkflow(cctx, ProcessDocuments, ProcessDocumentsInput{
-		Repository: input.Repository,
-		BucketName: bucketName,
-	}).Get(cctx, &processDocumentsResult)
-	if err != nil {
-		return AnalyzeOutput{}, fmt.Errorf("failed to process documents for %s: %w", input.Repository, err)
+	var embeddingsCount int
+	workflow.ExecuteActivity(
+		workflow.WithActivityOptions(ctx, defaultActivityOptions),
+		db.GetEmbeddingCount,
+		git.ArchiveRepositoryInput{
+			Repository: input.Repository,
+		},
+	).Get(ctx, &embeddingsCount)
+
+	if embeddingsCount == 0 {
+		cctx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+			WorkflowID: "process-documents-" + utils.CleanRepository(input.Repository),
+		})
+		var processDocumentsResult ProcessDocumentsOutput
+		err := workflow.ExecuteChildWorkflow(cctx, ProcessDocuments, ProcessDocumentsInput{
+			Repository: input.Repository,
+			BucketName: utils.CleanRepository(input.Repository),
+		}).Get(cctx, &processDocumentsResult)
+		if err != nil {
+			return AnalyzeOutput{}, fmt.Errorf("failed to process documents for %s: %w", input.Repository, err)
+		}
 	}
 
-	cctx = workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
+	cctx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
 		WorkflowID: "invoke-prompt-" + utils.CleanRepository(input.Repository),
 	})
 	var invokePromptResult InvokePromptOutput
-	err = workflow.ExecuteChildWorkflow(cctx, InvokePrompt, InvokePromptInput{
-		Repository: input.Repository,
-		BucketName: bucketName,
-		Query:      input.Query,
-	}).Get(cctx, &invokePromptResult)
+	err := workflow.ExecuteChildWorkflow(cctx, InvokePrompt, InvokePromptInput(
+		input,
+	)).Get(cctx, &invokePromptResult)
 	if err != nil {
 		return AnalyzeOutput{}, fmt.Errorf("failed to invoke prompt %s for %s: %w", input.Query, input.Repository, err)
 	}
 
-	return AnalyzeOutput{
-		Response: invokePromptResult.Response,
-	}, nil
+	return AnalyzeOutput(
+		invokePromptResult,
+	), nil
 }
 
 type ProcessDocumentsInput struct {
@@ -164,7 +172,6 @@ func ProcessDocuments(ctx workflow.Context, input ProcessDocumentsInput) (Proces
 
 type InvokePromptInput struct {
 	Repository string
-	BucketName string
 	Query      string
 }
 type InvokePromptOutput struct {

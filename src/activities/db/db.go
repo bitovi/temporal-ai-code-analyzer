@@ -54,6 +54,26 @@ func InsertEmbedding(ctx context.Context, input InsertEmbeddingInput) error {
 	return err
 }
 
+type GetEmbeddingCountInput struct {
+	Repository string
+}
+
+func GetEmbeddingCount(ctx context.Context, input GetEmbeddingCountInput) (int, error) {
+	conn, err := getConnection(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	var count int
+	query := "SELECT COUNT(*) FROM documents WHERE repository=$1"
+	err = conn.QueryRow(ctx, query, input.Repository).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("error fetching document count: %w", err)
+	}
+
+	return count, nil
+}
+
 type GetRelatedDocumentsInput struct {
 	Repository string
 	Query      string
