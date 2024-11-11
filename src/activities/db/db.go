@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"bitovi.com/code-analyzer/src/activities/llm"
+	"bitovi.com/code-analyzer/src/activities/s3"
 	"github.com/jackc/pgx/v5"
 	"github.com/pgvector/pgvector-go"
 )
@@ -23,10 +24,12 @@ func getConnection(ctx context.Context) (*pgx.Conn, error) {
 type EmbeddingRecord struct {
 	Repository string
 	Key        string
+	Content    string
 	Embedding  []float32
 }
 type InsertEmbeddingInput struct {
 	EmbeddingRecord
+	Bucket string
 }
 
 func InsertEmbedding(ctx context.Context, input InsertEmbeddingInput) error {
@@ -35,11 +38,17 @@ func InsertEmbedding(ctx context.Context, input InsertEmbeddingInput) error {
 		return err
 	}
 
+	content, err := s3.GetObject(input.Bucket, input.Key)
+	if err != nil {
+		return fmt.Errorf("error getting related document %s from bucket: %w", input.Key, err)
+	}
+
 	_, err = conn.Exec(
 		ctx,
-		"INSERT INTO documents (repository, key, embedding) VALUES ($1, $2, $3)",
+		"INSERT INTO documents (repository, key, content, embedding) VALUES ($1, $2, $3, $4)",
 		input.Repository,
 		input.Key,
+		content,
 		pgvector.NewVector(input.Embedding),
 	)
 	return err
@@ -51,7 +60,7 @@ type GetRelatedDocumentsInput struct {
 	Limit      int
 }
 type GetRelatedDocumentsOutput struct {
-	Keys []string
+	Contents []string
 }
 
 func GetRelatedDocuments(ctx context.Context, input GetRelatedDocumentsInput) (GetRelatedDocumentsOutput, error) {
@@ -69,22 +78,22 @@ func GetRelatedDocuments(ctx context.Context, input GetRelatedDocumentsInput) (G
 	if limit == 0 {
 		limit = 5
 	}
-	query := "SELECT key FROM documents WHERE repository=$1  ORDER BY embedding <=> $2 LIMIT $3"
+
+	query := "SELECT content FROM documents WHERE repository=$1 ORDER BY embedding <=> $2 LIMIT $3"
 	rows, err := conn.Query(ctx, query, input.Repository, pgvector.NewVector(embeddingForQuery), limit)
 	if err != nil {
 		return GetRelatedDocumentsOutput{}, fmt.Errorf("error fetching related documents: %w", err)
 	}
-
 	defer rows.Close()
 
-	var keys []string
+	var contents []string
 	for rows.Next() {
 		var doc EmbeddingRecord
-		err = rows.Scan(&doc.Key)
+		err = rows.Scan(&doc.Content)
 		if err != nil {
 			return GetRelatedDocumentsOutput{}, err
 		}
-		keys = append(keys, doc.Key)
+		contents = append(contents, doc.Content)
 	}
 
 	if rows.Err() != nil {
@@ -92,6 +101,6 @@ func GetRelatedDocuments(ctx context.Context, input GetRelatedDocumentsInput) (G
 	}
 
 	return GetRelatedDocumentsOutput{
-		Keys: keys,
+		Contents: contents,
 	}, nil
 }

@@ -42,7 +42,7 @@ func ArchiveRepository(input ArchiveRepositoryInput) (ArchiveRepositoryOutput, e
 		if info.IsDir() {
 			return nil
 		}
-		if utils.IsHiddenFile(path) || utils.IsConfigFile(path) {
+		if utils.IsHiddenFile(path) || utils.IsConfigFile(path) || utils.IsImageFile(path) {
 			return nil
 		}
 		fileList = append(fileList, path)
@@ -66,7 +66,7 @@ func ArchiveRepository(input ArchiveRepositoryInput) (ArchiveRepositoryOutput, e
 			return ArchiveRepositoryOutput{}, fmt.Errorf("error reading %s: %w", filePath, err)
 		}
 
-		key := strings.ReplaceAll(filePath, "/", "_")
+		key := strings.ReplaceAll(filePath, temporaryDirectory+"/", "")
 		err = s3.PutObject(
 			input.Bucket,
 			key,

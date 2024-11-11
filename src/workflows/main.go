@@ -27,7 +27,6 @@ type AnalyzeOutput struct {
 
 func AnalyzeCode(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, error) {
 	bucketName := utils.CleanRepository(input.Repository)
-
 	cctx := workflow.WithChildOptions(ctx, workflow.ChildWorkflowOptions{
 		WorkflowID: "process-documents-" + utils.CleanRepository(input.Repository),
 	})
@@ -119,6 +118,7 @@ func ProcessDocuments(ctx workflow.Context, input ProcessDocumentsInput) (Proces
 			workflow.WithActivityOptions(ctx, defaultActivityOptions),
 			db.InsertEmbedding,
 			db.InsertEmbeddingInput{
+				Bucket: input.BucketName,
 				EmbeddingRecord: db.EmbeddingRecord{
 					Repository: input.Repository,
 					Key:        e.Key,
@@ -133,29 +133,29 @@ func ProcessDocuments(ctx workflow.Context, input ProcessDocumentsInput) (Proces
 	}
 	records := len(embeddings)
 
-	// deleteObjectFutures := make([]workflow.Future, len(archiveResult.Keys))
-	// for i, key := range archiveResult.Keys {
-	// 	f := workflow.ExecuteActivity(
-	// 		workflow.WithActivityOptions(ctx, defaultActivityOptions),
-	// 		s3.DeleteObject,
-	// 		s3.DeleteObjectInput{
-	// 			Bucket: input.BucketName,
-	// 			Key:    key,
-	// 		},
-	// 	)
-	// 	deleteObjectFutures[i] = f
-	// }
-	// for _, f := range deleteObjectFutures {
-	// 	f.Get(ctx, nil)
-	// }
+	deleteObjectFutures := make([]workflow.Future, len(archiveResult.Keys))
+	for i, key := range archiveResult.Keys {
+		f := workflow.ExecuteActivity(
+			workflow.WithActivityOptions(ctx, defaultActivityOptions),
+			s3.DeleteObject,
+			s3.DeleteObjectInput{
+				Bucket: input.BucketName,
+				Key:    key,
+			},
+		)
+		deleteObjectFutures[i] = f
+	}
+	for _, f := range deleteObjectFutures {
+		f.Get(ctx, nil)
+	}
 
-	// workflow.ExecuteActivity(
-	// 	workflow.WithActivityOptions(ctx, defaultActivityOptions),
-	// 	s3.DeleteBucket,
-	// 	s3.DeleteBucketInput{
-	// 		Bucket: input.BucketName,
-	// 	},
-	// ).Get(ctx, nil)
+	workflow.ExecuteActivity(
+		workflow.WithActivityOptions(ctx, defaultActivityOptions),
+		s3.DeleteBucket,
+		s3.DeleteBucketInput{
+			Bucket: input.BucketName,
+		},
+	).Get(ctx, nil)
 
 	return ProcessDocumentsOutput{
 		Records: records,
@@ -187,9 +187,8 @@ func InvokePrompt(ctx workflow.Context, input InvokePromptInput) (InvokePromptOu
 		workflow.WithActivityOptions(ctx, defaultActivityOptions),
 		llm.InvokePrompt,
 		llm.InvokePromptInput{
-			Query:                  input.Query,
-			RelatedDocumentsBucket: input.BucketName,
-			RelatedDocumentsKeys:   relatedDocuments.Keys,
+			Query:            input.Query,
+			RelatedDocuments: relatedDocuments.Contents,
 		},
 	).Get(ctx, &response)
 

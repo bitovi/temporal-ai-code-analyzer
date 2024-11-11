@@ -119,28 +119,16 @@ func FetchCompletion(input [][]string) (ChatCompletion, error) {
 }
 
 type InvokePromptInput struct {
-	Query                  string
-	RelatedDocumentsBucket string
-	RelatedDocumentsKeys   []string
+	Query            string
+	RelatedDocuments []string
 }
 
 func InvokePrompt(input InvokePromptInput) (string, error) {
-	var relatedDocuments = make([]string, len(input.RelatedDocumentsKeys))
-	for i, key := range input.RelatedDocumentsKeys {
-		doc, err := s3.GetObject(input.RelatedDocumentsBucket, key)
-		if err != nil {
-			return "", fmt.Errorf("error getting related document %s from bucket: %w", key, err)
-		}
-		relatedDocuments[i] = string(doc)
-	}
-
 	prompt := [][]string{
 		{"system", "You are a friendly, helpful software assistant. Your goal is to help users understand the code within a Git repository."},
 		{"system", "You should respond in short paragraphs, using Markdown formatting for any blocks of code, separated with two newlines to keep your responses easily readable."},
 		{"system", "Whenever possible, use code examples derived from the documentation provided."},
-		// {"system", "Import references must be included where relevant so that the reader can easily figure out how to import the necessary dependencies."},
-		// {"system", "Do not use your existing knowledge to determine import references, only use import references as they appear in the relevant documentation."},
-		{"system", "Here are the files from the Git repository that are relevant to the user's question: " + strings.Join(relatedDocuments, "\n\n")},
+		{"system", "Here are the files from the Git repository that are relevant to the user's question: " + strings.Join(input.RelatedDocuments, "\n\n")},
 		{"user", input.Query},
 	}
 
