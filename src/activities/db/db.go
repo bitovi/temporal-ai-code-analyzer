@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"bitovi.com/code-analyzer/src/activities/s3"
+	"bitovi.com/code-analyzer/src/utils"
 	"github.com/jackc/pgx/v5"
 	"github.com/pgvector/pgvector-go"
 )
@@ -32,6 +33,9 @@ type InsertEmbeddingInput struct {
 }
 
 func InsertEmbedding(ctx context.Context, input InsertEmbeddingInput) error {
+	if utils.ChaosExists("db") {
+		return fmt.Errorf("error inserting embedding -- DB out to lunch, back in 15 minutes")
+	}
 	conn, err := getConnection(ctx)
 	if err != nil {
 		return err
@@ -58,6 +62,9 @@ type GetEmbeddingCountInput struct {
 }
 
 func GetEmbeddingCount(ctx context.Context, input GetEmbeddingCountInput) (int, error) {
+	if utils.ChaosExists("db") {
+		return 0, fmt.Errorf("error inserting embedding -- DB out to lunch, back in 15 minutes")
+	}
 	conn, err := getConnection(ctx)
 	if err != nil {
 		return 0, err
@@ -83,6 +90,9 @@ type GetRelatedDocumentsOutput struct {
 }
 
 func GetRelatedDocuments(ctx context.Context, input GetRelatedDocumentsInput) (GetRelatedDocumentsOutput, error) {
+	if utils.ChaosExists("db") {
+		return GetRelatedDocumentsOutput{}, fmt.Errorf("error inserting embedding -- DB out to lunch, back in 15 minutes")
+	}
 	conn, err := getConnection(ctx)
 	if err != nil {
 		return GetRelatedDocumentsOutput{}, err

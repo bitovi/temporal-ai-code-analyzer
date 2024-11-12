@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"bitovi.com/code-analyzer/src/utils"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -38,6 +39,9 @@ type CreateBucketInput struct {
 }
 
 func CreateBucket(input CreateBucketInput) error {
+	if utils.ChaosExists("aws") {
+		return fmt.Errorf("error creating S3 bucket -- AWS is totally down")
+	}
 	client, err := getClient()
 	if err != nil {
 		return fmt.Errorf("error getting S3 Client %w", err)
@@ -60,6 +64,9 @@ func DeleteBucket(input DeleteBucketInput) error {
 		return fmt.Errorf("error getting S3 Client %w", err)
 	}
 
+	if utils.ChaosExists("aws") {
+		return fmt.Errorf("error deleting S3 bucket -- AWS is totally down")
+	}
 	_, err = client.DeleteBucket(&s3.DeleteBucketInput{
 		Bucket: aws.String(input.Bucket),
 	})
@@ -71,6 +78,9 @@ func DeleteBucket(input DeleteBucketInput) error {
 }
 
 func PutObject(bucket string, key string, body []byte) error {
+	if utils.ChaosExists("aws") {
+		return fmt.Errorf("error with S3.Put -- AWS is totally down")
+	}
 	client, err := getClient()
 	if err != nil {
 		return fmt.Errorf("error getting S3 Client %w", err)
@@ -112,6 +122,10 @@ type DeleteObjectInput struct {
 
 func DeleteObject(input DeleteObjectInput) (*s3.DeleteObjectOutput, error) {
 	s3Client, _ := getClient()
+
+	if utils.ChaosExists("aws") {
+		return nil, fmt.Errorf("error deleting S3 bucket -- AWS is totally down")
+	}
 	_, _ = s3Client.DeleteObject(&s3.DeleteObjectInput{
 		Bucket: aws.String(input.Bucket),
 		Key:    aws.String(input.Key),

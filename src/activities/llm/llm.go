@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"bitovi.com/code-analyzer/src/activities/s3"
+	"bitovi.com/code-analyzer/src/utils"
 	"bitovi.com/code-analyzer/src/utils/http"
 )
 
@@ -22,6 +23,9 @@ type GetEmbeddingDataOutput struct {
 }
 
 func GetEmbeddingData(input GetEmbeddingDataInput) (GetEmbeddingDataOutput, error) {
+	if utils.ChaosExists("aws") {
+		return GetEmbeddingDataOutput{}, fmt.Errorf("error getting object from S3 -- AWS is totally down")
+	}
 	body, err := s3.GetObject(
 		input.Bucket,
 		input.Key,
@@ -30,6 +34,9 @@ func GetEmbeddingData(input GetEmbeddingDataInput) (GetEmbeddingDataOutput, erro
 		return GetEmbeddingDataOutput{}, fmt.Errorf("error fetching %s from S3 bucket: %w", input.Key, err)
 	}
 
+	if utils.ChaosExists("openai") {
+		return GetEmbeddingDataOutput{}, fmt.Errorf("error fetching embeddings -- OpenAI Rate Limit Reached")
+	}
 	result, err := FetchEmbedding(string(body))
 	if err != nil {
 		if strings.Contains(err.Error(), "maximum context length") {
@@ -56,6 +63,9 @@ type EmbeddingResponse struct {
 }
 
 func FetchEmbedding(text string) ([]float32, error) {
+	if utils.ChaosExists("openai") {
+		return []float32{}, fmt.Errorf("error fetching embeddings -- OpenAI Rate Limit Reached")
+	}
 	url := "https://api.openai.com/v1/embeddings"
 
 	data := &FetchEmbeddingsApiRequest{
@@ -132,6 +142,9 @@ func InvokePrompt(input InvokePromptInput) (string, error) {
 		{"user", input.Query},
 	}
 
+	if utils.ChaosExists("openai") {
+		return "", fmt.Errorf("error fetching completion -- OpenAI Rate Limit Reached")
+	}
 	invokeResponse, _ := FetchCompletion(prompt)
 	return invokeResponse.Choices[0].Message.Content, nil
 }

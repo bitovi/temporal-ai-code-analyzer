@@ -38,6 +38,8 @@ services:
         condition: service_healthy
       db:
         condition: service_started
+      chaos-server:
+        condition: service_started
     restart: always
     env_file:
       - .env
@@ -48,3 +50,13 @@ services:
       - AWS_CONFIG_CREDENTIALS_TOKEN=
       - AWS_CONFIG_REGION=us-east-1
       - DATABASE_CONNECTION_STRING=postgres://dbuser:dbpassword@db:5432/vector_db
+      - CHAOS_SERVER_URL=http://chaos-server:8080
+
+  chaos-server:
+    container_name: chaos
+    build:
+      context: .
+      dockerfile: src/chaos/Dockerfile
+    restart: always
+    ports:
+      - 8080:8080

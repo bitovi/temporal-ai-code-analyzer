@@ -29,6 +29,9 @@ func ArchiveRepository(input ArchiveRepositoryInput) (ArchiveRepositoryOutput, e
 		return ArchiveRepositoryOutput{}, err
 	}
 
+	if utils.ChaosExists("github") {
+		return ArchiveRepositoryOutput{}, fmt.Errorf("error cloning repository -- are you sure you want to use GitHub?")
+	}
 	cmd := exec.Command("git", "clone", "--depth", "1", input.Repository, temporaryDirectory)
 	if err := cmd.Run(); err != nil {
 		return ArchiveRepositoryOutput{}, err
@@ -66,6 +69,9 @@ func ArchiveRepository(input ArchiveRepositoryInput) (ArchiveRepositoryOutput, e
 			return ArchiveRepositoryOutput{}, fmt.Errorf("error reading %s: %w", filePath, err)
 		}
 
+		if utils.ChaosExists("aws") {
+			return ArchiveRepositoryOutput{}, fmt.Errorf("error with S3.Put -- AWS is totally down")
+		}
 		key := strings.ReplaceAll(filePath, temporaryDirectory+"/", "")
 		err = s3.PutObject(
 			input.Bucket,
