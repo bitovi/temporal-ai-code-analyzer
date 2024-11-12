@@ -29,6 +29,7 @@ func main() {
 
 	w.RegisterActivity(git.ArchiveRepository)
 
+	w.RegisterActivity(llm.FetchEmbedding)
 	w.RegisterActivity(llm.GetEmbeddingData)
 	w.RegisterActivity(llm.InvokePrompt)
 

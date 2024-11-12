@@ -34,6 +34,14 @@ func AnalyzeCode(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, error
 		},
 	).Get(ctx, &embeddingsCount)
 
+	fetchEmbeddingCtx := workflow.WithRetryPolicy(
+		workflow.WithActivityOptions(ctx, defaultActivityOptions),
+		temporal.RetryPolicy{
+			InitialInterval: time.Second * 8,
+			MaximumAttempts: 5,
+		},
+	)
+
 	if embeddingsCount == 0 {
 		bucketName := utils.CleanRepository(input.Repository)
 
@@ -58,13 +66,7 @@ func AnalyzeCode(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, error
 		embeddingsFutures := make([]workflow.Future, len(archiveResult.Keys))
 		for i, key := range archiveResult.Keys {
 			f := workflow.ExecuteActivity(
-				workflow.WithRetryPolicy(
-					workflow.WithActivityOptions(ctx, defaultActivityOptions),
-					temporal.RetryPolicy{
-						InitialInterval: time.Second * 8,
-						MaximumAttempts: 5,
-					},
-				),
+				fetchEmbeddingCtx,
 				llm.GetEmbeddingData,
 				llm.GetEmbeddingDataInput{
 					Bucket: bucketName,
@@ -128,13 +130,20 @@ func AnalyzeCode(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, error
 		).Get(ctx, nil)
 	}
 
+	var embeddingsForQuery []float32
+	workflow.ExecuteActivity(
+		fetchEmbeddingCtx,
+		llm.FetchEmbedding,
+		input.Query,
+	).Get(ctx, &embeddingsForQuery)
+
 	var relatedDocuments db.GetRelatedDocumentsOutput
 	workflow.ExecuteActivity(
 		workflow.WithActivityOptions(ctx, defaultActivityOptions),
 		db.GetRelatedDocuments,
 		db.GetRelatedDocumentsInput{
 			Repository: input.Repository,
-			Query:      input.Query,
+			Embedding:  embeddingsForQuery,
 			Limit:      5,
 		},
 	).Get(ctx, &relatedDocuments)

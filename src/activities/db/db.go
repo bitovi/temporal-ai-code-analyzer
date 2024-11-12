@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"bitovi.com/code-analyzer/src/activities/llm"
 	"bitovi.com/code-analyzer/src/activities/s3"
 	"github.com/jackc/pgx/v5"
 	"github.com/pgvector/pgvector-go"
@@ -76,7 +75,7 @@ func GetEmbeddingCount(ctx context.Context, input GetEmbeddingCountInput) (int, 
 
 type GetRelatedDocumentsInput struct {
 	Repository string
-	Query      string
+	Embedding  []float32
 	Limit      int
 }
 type GetRelatedDocumentsOutput struct {
@@ -84,18 +83,13 @@ type GetRelatedDocumentsOutput struct {
 }
 
 func GetRelatedDocuments(ctx context.Context, input GetRelatedDocumentsInput) (GetRelatedDocumentsOutput, error) {
-	embeddingForQuery, err := llm.FetchEmbedding(input.Query)
-	if err != nil {
-		return GetRelatedDocumentsOutput{}, fmt.Errorf("error getting embeddings data for query %s: %w", input.Query, err)
-	}
-
 	conn, err := getConnection(ctx)
 	if err != nil {
 		return GetRelatedDocumentsOutput{}, err
 	}
 
 	query := "SELECT key, content FROM documents WHERE repository=$1 ORDER BY embedding <=> $2 LIMIT $3"
-	rows, err := conn.Query(ctx, query, input.Repository, pgvector.NewVector(embeddingForQuery), input.Limit)
+	rows, err := conn.Query(ctx, query, input.Repository, pgvector.NewVector(input.Embedding), input.Limit)
 	if err != nil {
 		return GetRelatedDocumentsOutput{}, fmt.Errorf("error fetching related documents: %w", err)
 	}
