@@ -25,6 +25,8 @@ type AnalyzeOutput struct {
 }
 
 func AnalyzeCode(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, error) {
+	workflow.Sleep(ctx, time.Second*10)
+
 	fetchEmbeddingCtx := workflow.WithRetryPolicy(
 		workflow.WithActivityOptions(ctx, defaultActivityOptions),
 		temporal.RetryPolicy{
