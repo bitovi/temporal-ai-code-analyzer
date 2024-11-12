@@ -25,15 +25,6 @@ type AnalyzeOutput struct {
 }
 
 func AnalyzeCode(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, error) {
-	var embeddingsCount int
-	workflow.ExecuteActivity(
-		workflow.WithActivityOptions(ctx, defaultActivityOptions),
-		db.GetEmbeddingCount,
-		git.ArchiveRepositoryInput{
-			Repository: input.Repository,
-		},
-	).Get(ctx, &embeddingsCount)
-
 	fetchEmbeddingCtx := workflow.WithRetryPolicy(
 		workflow.WithActivityOptions(ctx, defaultActivityOptions),
 		temporal.RetryPolicy{
@@ -42,93 +33,91 @@ func AnalyzeCode(ctx workflow.Context, input AnalyzeInput) (AnalyzeOutput, error
 		},
 	)
 
-	if embeddingsCount == 0 {
-		bucketName := utils.CleanRepository(input.Repository)
+	bucketName := utils.CleanRepository(input.Repository)
 
-		workflow.ExecuteActivity(
-			workflow.WithActivityOptions(ctx, defaultActivityOptions),
-			s3.CreateBucket,
-			s3.CreateBucketInput{
+	workflow.ExecuteActivity(
+		workflow.WithActivityOptions(ctx, defaultActivityOptions),
+		s3.CreateBucket,
+		s3.CreateBucketInput{
+			Bucket: bucketName,
+		},
+	).Get(ctx, nil)
+
+	var archiveResult git.ArchiveRepositoryOutput
+	workflow.ExecuteActivity(
+		workflow.WithActivityOptions(ctx, defaultActivityOptions),
+		git.ArchiveRepository,
+		git.ArchiveRepositoryInput{
+			Repository: input.Repository,
+			Bucket:     bucketName,
+		},
+	).Get(ctx, &archiveResult)
+
+	embeddingsFutures := make([]workflow.Future, len(archiveResult.Keys))
+	for i, key := range archiveResult.Keys {
+		f := workflow.ExecuteActivity(
+			fetchEmbeddingCtx,
+			llm.GetEmbeddingData,
+			llm.GetEmbeddingDataInput{
 				Bucket: bucketName,
+				Key:    key,
 			},
-		).Get(ctx, nil)
-
-		var archiveResult git.ArchiveRepositoryOutput
-		workflow.ExecuteActivity(
-			workflow.WithActivityOptions(ctx, defaultActivityOptions),
-			git.ArchiveRepository,
-			git.ArchiveRepositoryInput{
-				Repository: input.Repository,
-				Bucket:     bucketName,
-			},
-		).Get(ctx, &archiveResult)
-
-		embeddingsFutures := make([]workflow.Future, len(archiveResult.Keys))
-		for i, key := range archiveResult.Keys {
-			f := workflow.ExecuteActivity(
-				fetchEmbeddingCtx,
-				llm.GetEmbeddingData,
-				llm.GetEmbeddingDataInput{
-					Bucket: bucketName,
-					Key:    key,
-				},
-			)
-			embeddingsFutures[i] = f
-		}
-
-		var embeddings []llm.GetEmbeddingDataOutput
-		for _, f := range embeddingsFutures {
-			var embeddingResult llm.GetEmbeddingDataOutput
-			f.Get(ctx, &embeddingResult)
-			if len(embeddingResult.Embedding) > 0 {
-				embeddings = append(embeddings, embeddingResult)
-			}
-		}
-
-		insertFutures := make([]workflow.Future, len(embeddings))
-		for i, e := range embeddings {
-			f := workflow.ExecuteActivity(
-				workflow.WithActivityOptions(ctx, defaultActivityOptions),
-				db.InsertEmbedding,
-				db.InsertEmbeddingInput{
-					Bucket: bucketName,
-					EmbeddingRecord: db.EmbeddingRecord{
-						Repository: input.Repository,
-						Key:        e.Key,
-						Embedding:  e.Embedding,
-					},
-				},
-			)
-			insertFutures[i] = f
-		}
-		for _, f := range insertFutures {
-			f.Get(ctx, nil)
-		}
-
-		deleteObjectFutures := make([]workflow.Future, len(archiveResult.Keys))
-		for i, key := range archiveResult.Keys {
-			f := workflow.ExecuteActivity(
-				workflow.WithActivityOptions(ctx, defaultActivityOptions),
-				s3.DeleteObject,
-				s3.DeleteObjectInput{
-					Bucket: bucketName,
-					Key:    key,
-				},
-			)
-			deleteObjectFutures[i] = f
-		}
-		for _, f := range deleteObjectFutures {
-			f.Get(ctx, nil)
-		}
-
-		workflow.ExecuteActivity(
-			workflow.WithActivityOptions(ctx, defaultActivityOptions),
-			s3.DeleteBucket,
-			s3.DeleteBucketInput{
-				Bucket: bucketName,
-			},
-		).Get(ctx, nil)
+		)
+		embeddingsFutures[i] = f
 	}
+
+	var embeddings []llm.GetEmbeddingDataOutput
+	for _, f := range embeddingsFutures {
+		var embeddingResult llm.GetEmbeddingDataOutput
+		f.Get(ctx, &embeddingResult)
+		if len(embeddingResult.Embedding) > 0 {
+			embeddings = append(embeddings, embeddingResult)
+		}
+	}
+
+	insertFutures := make([]workflow.Future, len(embeddings))
+	for i, e := range embeddings {
+		f := workflow.ExecuteActivity(
+			workflow.WithActivityOptions(ctx, defaultActivityOptions),
+			db.InsertEmbedding,
+			db.InsertEmbeddingInput{
+				Bucket: bucketName,
+				EmbeddingRecord: db.EmbeddingRecord{
+					Repository: input.Repository,
+					Key:        e.Key,
+					Embedding:  e.Embedding,
+				},
+			},
+		)
+		insertFutures[i] = f
+	}
+	for _, f := range insertFutures {
+		f.Get(ctx, nil)
+	}
+
+	deleteObjectFutures := make([]workflow.Future, len(archiveResult.Keys))
+	for i, key := range archiveResult.Keys {
+		f := workflow.ExecuteActivity(
+			workflow.WithActivityOptions(ctx, defaultActivityOptions),
+			s3.DeleteObject,
+			s3.DeleteObjectInput{
+				Bucket: bucketName,
+				Key:    key,
+			},
+		)
+		deleteObjectFutures[i] = f
+	}
+	for _, f := range deleteObjectFutures {
+		f.Get(ctx, nil)
+	}
+
+	workflow.ExecuteActivity(
+		workflow.WithActivityOptions(ctx, defaultActivityOptions),
+		s3.DeleteBucket,
+		s3.DeleteBucketInput{
+			Bucket: bucketName,
+		},
+	).Get(ctx, nil)
 
 	var embeddingsForQuery []float32
 	workflow.ExecuteActivity(
