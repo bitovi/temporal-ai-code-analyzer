@@ -28,11 +28,20 @@ services:
       - "${TMPDIR:-/tmp}/localstack:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
 
+  chaos-server:
+    container_name: chaos
+    build:
+      context: .
+      dockerfile: src/chaos/Dockerfile
+    restart: always
+    ports:
+      - 8080:8080
+      
   worker:
     container_name: worker
     build:
       context: .
-      dockerfile: src/worker/Dockerfile
+      dockerfile: Dockerfile
     depends_on:
       localstack:
         condition: service_healthy
@@ -48,3 +57,11 @@ services:
       - AWS_CONFIG_CREDENTIALS_TOKEN=
       - AWS_CONFIG_REGION=us-east-1
       - DATABASE_CONNECTION_STRING=postgres://dbuser:dbpassword@db:5432/vector_db
+      - CHAOS_SERVER_URL=http://chaos-server:8080
+    volumes:
+      - ./src:/usr/src/app/src
+    command: >
+      sh -c '\
+        sleep 10 \
+        && npx nodemon --watch src --ext ts --exec "ts-node src/worker.ts" \
+      '

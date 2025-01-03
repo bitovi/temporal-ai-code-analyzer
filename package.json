@@ -1,0 +1,33 @@
+{
+  "name": "temporal-ai-code-analyzer",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --build",
+    "start": "ts-node src/worker.ts",
+    "analyse": "ts-node src/client/client.ts",
+    "chaos": "go run src/chaos/client/main.go"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.717.0",
+    "@langchain/community": "^0.3.21",
+    "@langchain/openai": "^0.3.16",
+    "@temporalio/activity": "^1.11.5",
+    "@temporalio/client": "^1.11.5",
+    "@temporalio/worker": "^1.11.5",
+    "@temporalio/workflow": "^1.11.5",
+    "dotenv": "^16.4.7",
+    "pg": "^8.13.1",
+    "pgvector": "^0.2.0",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@tsconfig/node18": "^18.2.4",
+    "@types/node": "^22.10.3",
+    "@types/pg": "^8.11.10",
+    "@types/yargs": "^17.0.33",
+    "nodemon": "^3.1.0",
+    "ts-node": "^10.8.1",
+    "typescript": "^5.7.2"
+  }
+}

@@ -54,6 +54,13 @@ Run the following command to turn everything off:
 The script below will start a new workflow:
 
 ```bash
-go run src/client/main.go <Git Repo URL> <Question>
+npm run anaylse <Git Repo URL> <Question>
 ```
 
+## Chaos
+
+To trigger chaos to bring down certain parts use:
+
+```bash
+npm run chaos <openai/aws/db>
+```
