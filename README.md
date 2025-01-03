@@ -14,15 +14,18 @@ Use the following command to run everything you need locally:
 
 ## Obtain an OpenAI API key
 
-To run this project, you will need an OpenAI API key.  If you already have an OpenAI account, you can setup a project and API key [on the OpenAI Settings page](https://platform.openai.com/settings/). If you don't have an account, you can sign up at [OpenAI](https://platform.openai.com/signup).  You'll need to perform two main steps to run this project:
+To run this project, you will need an OpenAI API key. If you already have an OpenAI account, you can setup a project and API key [on the OpenAI Settings page](https://platform.openai.com/settings/). If you don't have an account, you can sign up at [OpenAI](https://platform.openai.com/signup). You'll need to perform two main steps to run this project:
 
 1. To create an API key, create a project, first, then open the API Keys page from the left sidebar and create a new key.
 2. Open the `Limits` page for the new project and select the following models:
-   - `gpt-3.5-turbo`
-      - `text-embedding-ada-002`
-         - `gpt-4-turbo`
 
-         Once you've setup your API key and models, you'll be ready to run the project.  Note that sometimes it can take up to 15 minutes for the model selections to apply to your API key.
+   - `gpt-3.5-turbo`
+
+     - `text-embedding-ada-002`
+
+       - `gpt-4-turbo`
+
+       Once you've setup your API key and models, you'll be ready to run the project. Note that sometimes it can take up to 15 minutes for the model selections to apply to your API key.
 
 ## Configure Environment Variables
 
@@ -31,7 +34,6 @@ You will need to set the OpenAI API Key as an environment variable and will also
 ```bash
 cp .env-example .env
 ```
-
 
 ## Starting the application
 
@@ -54,7 +56,7 @@ Run the following command to turn everything off:
 The script below will start a new workflow:
 
 ```bash
-npm run anaylse <Git Repo URL> <Question>
+npm run analyze <Git Repo URL> <Question>
 ```
 
 ## Chaos

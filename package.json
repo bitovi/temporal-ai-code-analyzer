@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc --build",
     "start": "ts-node src/worker.ts",
-    "analyse": "ts-node src/client/client.ts",
+    "analyze": "ts-node src/client/client.ts",
     "chaos": "go run src/chaos/client/main.go",
     "format": "prettier --write \"src/**/*.ts\""
   },
