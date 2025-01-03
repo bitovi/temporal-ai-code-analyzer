@@ -118,8 +118,7 @@ export async function invokePrompt(input: InvokePromptInput): Promise<string> {
     ['system', 'Whenever possible, use code examples derived from the documentation provided.'],
     [
       'system',
-      "Here are the files from the Git repository that are relevant to the user's question: " +
-        input.relatedContent.join('\n\n'),
+      `Here are the files from the Git repository that are relevant to the user's question: ${input.relatedContent.join('\n\n')}`,
     ],
     ['user', input.query],
   ];
