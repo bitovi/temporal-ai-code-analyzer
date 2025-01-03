@@ -61,7 +61,6 @@ export async function insertEmbedding(input: InsertEmbeddingInput): Promise<void
       VALUES ($1, $2, $3, $4)
     `;
     const body = await content.Body?.transformToString();
-    console.log('Content::', body)
 
     const values = [
       input.repository,

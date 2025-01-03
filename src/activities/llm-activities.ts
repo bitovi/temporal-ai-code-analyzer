@@ -124,7 +124,6 @@ export async function invokePrompt(input: InvokePromptInput): Promise<string> {
     if (!completion || completion === "") {
       throw new Error('No choices returned in chat completion');
     }
-    console.log('Completion::', completion)
     return completion
   } catch (error: any) {
     console.error(`Error in invokePrompt: ${error.message}`);
