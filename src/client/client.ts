@@ -38,9 +38,9 @@ async function main() {
 
   console.log('Starting analysis for repository: %s with query: %s', repository, query);
 
-  const connection = await Connection.connect(getTemporalClientOptions());  
+  const connection = await Connection.connect(getTemporalClientOptions());
 
-  const client = new Client({ 
+  const client = new Client({
     connection,
     namespace: process.env.TEMPORAL_NAMESPACE,
   });
@@ -67,9 +67,16 @@ async function main() {
 
     const result: AnalyzeOutput = await handle.result();
 
-    console.log('Workflow completed. Repository: %s\nQuery: %s\nResponse: %s', repository, query, result.response);
+    console.log(
+      'Workflow completed. Repository: %s\nQuery: %s\nResponse: %s',
+      repository,
+      query,
+      result.response
+    );
 
-    console.log(`Repository:\n${repository}\n\nQuestion:\n${query}\n\nResponse:\n${result.response}`);
+    console.log(
+      `Repository:\n${repository}\n\nQuestion:\n${query}\n\nResponse:\n${result.response}`
+    );
   } catch (error: any) {
     console.error('Error executing workflow:', error);
     process.exit(1);

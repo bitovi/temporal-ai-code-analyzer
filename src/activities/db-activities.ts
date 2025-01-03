@@ -1,11 +1,7 @@
 import { Pool } from 'pg';
 import { GetS3ObjectInput, getS3Object } from './s3-activities';
 import { chaosExists } from './chaos';
-import {
-  fetchEmbedding,
-  GetRelatedDocumentsInput,
-  GetEmbeddingCountInput,
-} from './llm-activities';
+import { fetchEmbedding, GetRelatedDocumentsInput, GetEmbeddingCountInput } from './llm-activities';
 import pgvector from 'pgvector/pg';
 import dotenv from 'dotenv';
 
@@ -16,11 +12,11 @@ export interface EmbeddingRecord {
   key: string;
   content: string;
   embedding: number[];
-};
+}
 
 export interface InsertEmbeddingInput extends EmbeddingRecord {
   bucket: string;
-};
+}
 
 export type GetRelatedDocumentsOutput = {
   records: EmbeddingRecord[];
@@ -44,10 +40,10 @@ pool.on('error', (err) => {
  * @param input - The input data for insertion.
  */
 export async function insertEmbedding(input: InsertEmbeddingInput): Promise<void> {
-  const { exists } = await chaosExists({ key: "db" })
+  const { exists } = await chaosExists({ key: 'db' });
   if (exists) {
-		throw Error("error inserting embedding -- DB out to lunch, back in 15 minutes")
-	}
+    throw Error('error inserting embedding -- DB out to lunch, back in 15 minutes');
+  }
   const client = await pool.connect();
   try {
     const s3Input: GetS3ObjectInput = {
@@ -62,12 +58,7 @@ export async function insertEmbedding(input: InsertEmbeddingInput): Promise<void
     `;
     const body = await content.Body?.transformToString();
 
-    const values = [
-      input.repository,
-      input.key,
-      body,
-      pgvector.toSql(input.embedding),
-    ];
+    const values = [input.repository, input.key, body, pgvector.toSql(input.embedding)];
 
     await client.query(query, values);
   } catch (error) {
@@ -84,16 +75,17 @@ export async function insertEmbedding(input: InsertEmbeddingInput): Promise<void
  * @returns The count of embeddings.
  */
 export async function getEmbeddingCount(input: GetEmbeddingCountInput): Promise<number> {
-  const { exists } = await chaosExists({ key: "db" })
+  const { exists } = await chaosExists({ key: 'db' });
   if (exists) {
-		throw Error("error inserting embedding -- DB out to lunch, back in 15 minutes")
-	}
+    throw Error('error inserting embedding -- DB out to lunch, back in 15 minutes');
+  }
   const client = await pool.connect();
   try {
-    const query = 'SELECT COUNT(*) FROM documents WHERE repository = $1';
-    const values = [input.repository];
-    const res = await client.query(query, values);
-    return parseInt(res.rows[0].count, 10);
+    const query = 'SELECT COUNT(*) as count FROM documents WHERE repository = $1';
+    const {
+      rows: [{ count }],
+    } = await client.query(query, [input.repository]);
+    return Number(count);
   } catch (error) {
     console.error('Error fetching embedding count:', error);
     throw new Error(`Error fetching document count: ${(error as Error).message}`);
@@ -107,11 +99,13 @@ export async function getEmbeddingCount(input: GetEmbeddingCountInput): Promise<
  * @param input - The input data containing repository, query, and limit.
  * @returns An object containing an array of related embedding records.
  */
-export async function getRelatedDocuments(input: GetRelatedDocumentsInput): Promise<GetRelatedDocumentsOutput> {
-  const { exists } = await chaosExists({ key: "db" })
+export async function getRelatedDocuments(
+  input: GetRelatedDocumentsInput
+): Promise<GetRelatedDocumentsOutput> {
+  const { exists } = await chaosExists({ key: 'db' });
   if (exists) {
-		throw Error("error inserting embedding -- DB out to lunch, back in 15 minutes")
-	}
+    throw Error('error inserting embedding -- DB out to lunch, back in 15 minutes');
+  }
   try {
     const embeddingForQuery = await fetchEmbedding(input.query);
 
@@ -124,11 +118,7 @@ export async function getRelatedDocuments(input: GetRelatedDocumentsInput): Prom
         ORDER BY embedding <=> $2
         LIMIT $3
       `;
-      const values = [
-        input.repository,
-        pgvector.toSql(embeddingForQuery),
-        input.limit,
-      ];
+      const values = [input.repository, pgvector.toSql(embeddingForQuery), input.limit];
 
       const res = await client.query(query, values);
 

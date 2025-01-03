@@ -1,13 +1,21 @@
 import { proxyActivities } from '@temporalio/workflow';
-import * as activities from './activities'
+import * as activities from './activities';
 import { cleanRepository } from './utils';
 
-const { createS3Bucket, deleteS3Object, deleteS3Bucket, archiveRepository, insertEmbedding, getRelatedDocuments, invokePrompt } = proxyActivities<typeof activities>({
+const {
+  createS3Bucket,
+  deleteS3Object,
+  deleteS3Bucket,
+  archiveRepository,
+  insertEmbedding,
+  getRelatedDocuments,
+  invokePrompt,
+} = proxyActivities<typeof activities>({
   startToCloseTimeout: '1 minute',
   retry: {
     backoffCoefficient: 1,
-    initialInterval: '3 seconds'
-  }
+    initialInterval: '3 seconds',
+  },
 });
 
 const { getEmbeddingData } = proxyActivities<typeof activities>({
@@ -47,15 +55,17 @@ export async function analyzeCodeWorkflow(input: AnalyzeInput): Promise<AnalyzeO
   );
 
   const embeddingResults = await Promise.all(embeddingPromises);
-  const validEmbeddings = embeddingResults.filter((e: { embedding: string | any[]; }) => e.embedding.length > 0);
+  const validEmbeddings = embeddingResults.filter(
+    (e: { embedding: string | any[] }) => e.embedding.length > 0
+  );
 
-  const insertPromises = validEmbeddings.map((e: { key: any; embedding: any; }) =>
+  const insertPromises = validEmbeddings.map((e: { key: any; embedding: any }) =>
     insertEmbedding({
       bucket: bucketName,
       repository: input.repository,
       key: e.key,
       embedding: e.embedding,
-      content: '', 
+      content: '',
     })
   );
 
@@ -75,9 +85,9 @@ export async function analyzeCodeWorkflow(input: AnalyzeInput): Promise<AnalyzeO
     limit: 5,
   });
 
-  console.log({ relatedDocuments })
+  console.log({ relatedDocuments });
 
-  const relatedContent = relatedDocuments.records.map((record: { content: any; }) => record.content);
+  const relatedContent = relatedDocuments.records.map((record: { content: any }) => record.content);
 
   const response = await invokePrompt({
     query: input.query,

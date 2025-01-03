@@ -12,7 +12,7 @@ export const getTemporalClientOptions = (): TemporalClientOptions => {
   const temporalHostURL = process.env.TEMPORAL_HOST_PORT;
 
   if (!temporalHostURL) {
-    throw new Error("Temporal Host URL not defined");
+    throw new Error('Temporal Host URL not defined');
   }
 
   const temporalClientOptions: TemporalClientOptions = {
@@ -20,7 +20,7 @@ export const getTemporalClientOptions = (): TemporalClientOptions => {
   };
 
   const temporalCert = process.env.TEMPORAL_CERT;
-  const temporalCertKey = process.env.TEMPORAL_CERT_KEY
+  const temporalCertKey = process.env.TEMPORAL_CERT_KEY;
 
   if (temporalCert && temporalCertKey) {
     temporalClientOptions.tls = {
@@ -31,7 +31,6 @@ export const getTemporalClientOptions = (): TemporalClientOptions => {
     };
   }
 
-
   return temporalClientOptions;
 };
 
@@ -40,5 +39,5 @@ export function cleanRepository(repository: string): string {
     .replace(/http:\/\//g, '')
     .replace(/https:\/\//g, '')
     .replace(/\//g, '-')
-    .replace(/\./g, '-');       
-};
+    .replace(/\./g, '-');
+}
