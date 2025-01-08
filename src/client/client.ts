@@ -68,13 +68,6 @@ async function main() {
     const result: AnalyzeOutput = await handle.result();
 
     console.log(
-      'Workflow completed. Repository: %s\nQuery: %s\nResponse: %s',
-      repository,
-      query,
-      result.response
-    );
-
-    console.log(
       `Repository:\n${repository}\n\nQuestion:\n${query}\n\nResponse:\n${result.response}`
     );
   } catch (error: any) {
