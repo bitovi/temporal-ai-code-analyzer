@@ -6,7 +6,7 @@ import { cleanRepository } from '../utils';
 import { putS3Object } from './s3-activities';
 import { chaosExists } from './chaos';
 
-const configExtensions = ['.config', '.json', '.yaml', '.yml', '.ini', '.env'];
+const configExtensions = ['.config', '.json', '.yaml', '.yml', '.ini', '.env', '.mod', '.sum'];
 const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp'];
 
 export interface ArchiveRepositoryInput {
